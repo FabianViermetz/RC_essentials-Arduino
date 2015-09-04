@@ -1,10 +1,10 @@
 #include "Arduino.h"
-#define CHANNELS 16
+#define CHANNELS 8
 
 #define MAX_PULSE 2100
 #define MIN_PULSE 900
 #define PULSE_PRESET 1500
-#define DEADBAND 10
+#define DEADBAND 2000
 
 #define CHANNELS_W_ENDPULSE (CHANNELS+1)
 
@@ -43,11 +43,16 @@ void setup() {
 
   // ppm out
   pinMode(10, OUTPUT);
-  digitalWrite(10, PPM_POLARITY);
-  OCR1A = PPM_PULSE_LEN*2;                     // compare match register, change this
-  TCCR1B |= (1 << WGM12);          // turn on CTC mode
-  TCCR1B |= (1 << CS11);           // 8 prescaler: 0,5 microseconds at 16mhz
-  TIMSK1 |= (1 << OCIE1A);         // enable timer compare interrupt
+  digitalWrite(10, !PPM_POLARITY);
+  cli();
+  TCCR1A = 0; // set entire TCCR1 register to 0
+  TCCR1B = 0;
+  
+  OCR1A = 100;  // compare match register, change this
+  TCCR1B |= (1 << WGM12);  // turn on CTC mode
+  TCCR1B |= (1 << CS11);  // 8 prescaler: 0,5 microseconds at 16mhz
+  TIMSK1 |= (1 << OCIE1A); // enable timer compare interrupt
+  sei();
 
   Serial.begin(115200);
 
@@ -55,7 +60,11 @@ void setup() {
 
 void loop () {
   // nothing happens here since everything is interrupt trigered
-  Serial.println(pwm[2]);
+  for (uint8_t i = 2; i< 8; i++){
+    Serial.print(pwm[i]);
+    Serial.print("\t");
+  }
+  Serial.println();  
   delay(20);
 }
 
@@ -94,19 +103,17 @@ void calculate_pulses() {
 
 ISR(PCINT2_vect) {
   cur_micros = micros();  // interrupt service routine for port B, D0~D7
-  sei();
   ISR_function();
 }
 #if CHANNELS > 8
 ISR(PCINT0_vect) {
   cur_micros = micros();  // interrupt service routine for port C, A0~A7
-  sei();
   ISR_function();
 }
 #endif
 
 
-#if PPM_POLARITY
+#if PPM_POLARITY == 1
     #define TOGGLE_REST_PULSE  PINB &= ~(1 << 2)
     #define TOGGLE_BEGIN_PULSE PINB |= (1 << 2)
 #else
@@ -114,20 +121,27 @@ ISR(PCINT0_vect) {
     #define TOGGLE_BEGIN_PULSE PINB &= ~(1 << 2)
 #endif
 
+
+#define chanel_number 8  //set the number of chanels
+#define default_servo_value 1500  //set the default servo value
+#define PPM_FrLen 22500  //set the PPM frame length in microseconds (1ms = 1000µs)
+#define PPM_PulseLen 300  //set the pulse length
+#define onState 1  //set polarity of the pulses: 1 is positive, 0 is negative
+#define sigPin 10  //set PPM signal output pin on the arduino
+
 ISR (TIMER1_COMPA_vect) {
   static uint8_t i = 0;
   TCNT1 = 0;
   if (OCR1A < (PPM_PULSE_LEN << 1)+50) {
-    TOGGLE_REST_PULSE;
+    digitalWrite(10, 0);
     OCR1A = (pwm[(i++%CHANNELS_W_ENDPULSE)-1] - PPM_PULSE_LEN) << 1;
     if (i == 0) {
-      sei();
       calculate_pulses();
     }
   }
   else {
-    TOGGLE_BEGIN_PULSE;
-    OCR1A = PPM_PULSE_LEN;
+    digitalWrite(10, 1);
+    OCR1A = PPM_PULSE_LEN<<1;
   }
 }
 
