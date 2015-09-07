@@ -2,7 +2,7 @@
 #define INPUT_H
 
 void setup_input();
-void read_input();
+void process_input();
 
 
 

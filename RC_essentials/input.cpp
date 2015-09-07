@@ -4,19 +4,16 @@
 #include "basic_uart.h"
 
 extern int16_t rx[CHANNELS];
+extern int8_t subtrim[CHANNELS];
 
 /////////////////////////////////////////////// PWM ///////////////////////////////////////////////////////////
 #if defined (PWM_IN)
 
-#define MAX_PULSE 2100
-#define MIN_PULSE 900
-
 volatile uint32_t cur_micros = 0;
-volatile int8_t subtrim[CHANNELS] = PWM_IN_SUBTRIMS;
 
 void setup_input() {
-#if CHANNELS > 16
-#error : More than 16 Channels not supported!
+#if CHANNELS > 18
+#error : More than 18 Channels not supported!
 #endif
   // setting all pins as inputs except A3 as our PPM pin as output
   DDRD = B00000001; /*D0~D7  without Pin 0 and 1 for serial*/
@@ -50,14 +47,14 @@ void setup_input() {
 }
 
 
-void  read_input() {
+void  process_input() {
   // nothing to do here, everythin is interrupt-triggered
 }
 
 
 void ISR_function() {
-  static uint16_t cur_state, last_state, change;
-  static uint16_t pcint_last_change[CHANNELS];
+  static uint32_t cur_state, last_state, change;
+  static uint32_t pcint_last_change[CHANNELS];
   static uint16_t temp_pulse;
   cur_state = (PIND >> 2);
 #if CHANNELS > 6
@@ -71,10 +68,13 @@ void ISR_function() {
   last_state = cur_state;                         // updating last values with the new ones
 
   for (uint8_t i = 0 ; i < CHANNELS; i++) {
-    if ((change >> i) & 0x0001 == 1) {
+    if ((change >> i) & 0x000001 == 1) {
       temp_pulse = (cur_micros - pcint_last_change[i]);
       if ((temp_pulse < MAX_PULSE) && (temp_pulse > MIN_PULSE)) {
-        rx[i] = temp_pulse;// + subtrim[i];
+        temp_pulse += subtrim[i];
+        cli();
+        rx[i] = temp_pulse;
+        sei();
       }
       else {
         pcint_last_change[i] = cur_micros;
@@ -113,9 +113,9 @@ void setup_input() {
   serial_begin(100000);
 }
 
-void read_input() {
+void process_input() {
 #define SBUS_SYNCBYTE 0xF0
-  static uint16_t sbus[25] = {0}, sbus_rx[16];
+  static uint16_t sbus[25] = {0}, sbus_rx[18];
   static uint8_t sbusIndex = 0;
   while (serial_available()) {
     int val = serial_read();
@@ -146,7 +146,12 @@ void read_input() {
       //      if ((sbus[23]) & 0x0001)       sbus_rx[16] = 2000; else sbus_rx[16] = 1000;
       //      if ((sbus[23] >> 1) & 0x0001)  sbus_rx[17] = 2000; else sbus_rx[17] = 1000;
 
-      for (uint8_t i = 0; i < CHANNELS; i++) rx[i] = sbus_rx[i];
+      for (uint8_t i = 0; i < CHANNELS; i++) {
+        sbus_rx[i] += subtrim[i];
+        cli();
+        rx[i] = sbus_rx[i];
+        sei();
+      }
     }
   }
 }
@@ -157,10 +162,8 @@ void read_input() {
 
 #if defined PPM_IN
 
-#define MAX_PULSE 2100
-#define MIN_PULSE 900
 #define MIN_END_PULSE 3000
-#define PPM_IN_PIN 0
+#define PPM_IN_PIN 0            // D0 - RX
 
 volatile uint32_t cur_micros = 0;
 
@@ -171,17 +174,18 @@ void setup_input() {
 
 }
 
-void  read_input() {
+void  process_input() {
   // nothing to do here, everything is interrupt-triggered
 }
 
 volatile uint8_t ppm_state = 0;
 volatile uint8_t channel_counter = 0;
 
-void ISR_function() {
+void ISR_function_in() {
   static uint32_t pulse_start, cur_pulse;
   static uint8_t i = 0, cur_state;
   cur_state = (PIND & 0x01);
+  sei();
   if (!cur_state) { // falling edge
     // with every falling (or rising) edge the current signal ends and a new signal starts
     cur_pulse = cur_micros - pulse_start;
@@ -189,14 +193,19 @@ void ISR_function() {
 
     // if the endpulse is detected counter is reseted
     if (cur_pulse >= MIN_END_PULSE) i = 0;
-    else if ((cur_pulse > MIN_PULSE) && (cur_pulse < MAX_PULSE)) rx[i++] = cur_pulse;
+    else if ((cur_pulse > MIN_PULSE) && (cur_pulse < MAX_PULSE)) {
+      cur_pulse += subtrim[i];
+      cli();
+      rx[i++] = cur_pulse;
+      sei();
+    }
   }
 }
 
+
 ISR(PCINT2_vect) {                  // interrupt service routine for port D
   cur_micros = micros();
-  sei();
-  ISR_function();
+  ISR_function_in();
 }
 
 #endif // PPM_IN
