@@ -1,4 +1,4 @@
-# Arduino_PWM_PPM_converter
+# RC Essentials
 
 The Goal of this Project is to build a PWM to PPM Converter with an Arduino Pro Mini or similar Boards.
 
