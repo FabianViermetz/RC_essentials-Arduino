@@ -5,5 +5,4 @@ void setup_input();
 void process_input();
 
 
-
 #endif // INPUT_H
