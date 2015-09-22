@@ -35,7 +35,7 @@
 /*
  * set the number of yor data-channels. Possible are up to 18 channels.
  * you will get better results with PWM and PPM for 10 or less channels but accuracy is 
- * in general more than enough. (see explanation in *.ino)
+ * in general enough. (see explanation in *.ino)
  * additionally you can set subtrims (similar to the subtrims in your RC)
  */
 #define CHANNELS 8
@@ -49,13 +49,15 @@
 /*
  * normal RC give pulselengths of approx. 1000~2000 
  * the MIN and MAX settings musst be slightly bigger than the ones of your RC. 
- * probably set your RC's Endpoints first.
+ * probably set your RC's Endpoints first, before you change this.
  */
 #define MIN_PULSE     900
 #define MID_PULSE     1500
 #define MAX_PULSE     2100
 
-// polarity is usually HIGH
+/*
+ * polarity is usually HIGH
+ */
 #define PWM_POLARITY HIGH
 #define PPM_POLARITY HIGH
 
@@ -66,7 +68,7 @@
 ////////////////////////////////////////////
 
 /*
- * SBUS can be transmitted "fast" or "slow", meaning every 7µs(~140Hz) or every 14µs (~70Hz)
+ * SBUS can be transmitted "fast" or "slow", meaning every 7ms(~140Hz) or every 14ms (~70Hz)
  * in most cases you dont need fast_mode since common PPM and PWM is ~50Hz
  * 
  * SBUS_PORT defines the serial port, that is used for SBUS. ATMEGA328 only has 1 port,
@@ -91,7 +93,7 @@
  *  
  *  if you use it or not depends on your personal feeling and requirements
  */
-#define HIGH_PRECESSION
+//#define HIGH_PRECESSION
 
 
 #endif //CONF_H

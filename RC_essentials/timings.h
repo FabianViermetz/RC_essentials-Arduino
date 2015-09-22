@@ -16,6 +16,8 @@ unsigned long milli_s();
 #if defined HIGH_PRECESSION
   #define micro_s() (micros() >> 3)
   #define milli_s() (millis() >> 3)
+  #define delay_millis(ms) delay(ms<<3)
+  #define delay_micros(mis) delayMicroseconds(mis<<3)
 #else
   #define micro_s() micros()
   #define milli_s() millis()

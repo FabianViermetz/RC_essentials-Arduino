@@ -53,7 +53,6 @@ void setup() {
 }
 
 void loop () {
-  
   /*
   if you want to modify RX-Data, place your Main here
   */

@@ -59,7 +59,7 @@ void ISR_function() {
   static uint32_t pcint_last_change[CHANNELS];
   static uint16_t temp_pulse;
   
-// writing the PIN masks into one uint16_t
+// writing the PIN masks into one uint32_t
   cur_state = (PIND >> 4);
 #if CHANNELS > 4
   cur_state |= (PINB << 4);
@@ -68,13 +68,13 @@ void ISR_function() {
 #endif
 #endif
   sei();
-  change = cur_state ^ last_state;               // compares with last values
+  change = cur_state ^ last_state;                // compares with last values
   last_state = cur_state;                         // updating last values with the new ones
 
   for (uint8_t i = 0 ; i < CHANNELS; i++) {
-    if ((change >> i) & 0x000001 == 1) {
-      if ((cur_state >> i) & 0x000001 == PWM_POLARITY) pcint_last_change[i] = cur_micros;    // pulse begin; rising or falling edge depending on PWM_POLARITY
-      else {                                                                                 // pulse end
+    if (((change >> i) & 0x000001) == 1) {
+      if (((cur_state >> i) & 0x000001) == PWM_POLARITY) pcint_last_change[i] = cur_micros;    // pulse begin; rising or falling edge depending on PWM_POLARITY
+      else {                                                                                   // pulse end
         temp_pulse = (cur_micros - pcint_last_change[i]);  // calculating pulse
         constrain(temp_pulse, MIN_PULSE, MAX_PULSE);
         temp_pulse += subtrim[i];
