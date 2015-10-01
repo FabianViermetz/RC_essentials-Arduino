@@ -4,7 +4,7 @@
 #include "basic_uart.h"
 #include "timings.h"
 
-extern int16_t rx[CHANNELS];
+extern int16_t chan[CHANNELS];
 
 /////////////////////////////////////////////// PPM ///////////////////////////////////////////////////////////
 
@@ -18,7 +18,7 @@ extern int16_t rx[CHANNELS];
 volatile uint16_t sequence_len;
 
 void setup_output() {
-  sequence_len = max((CHANNELS*MAX_PULSE) + PPM_END_PULSE, PPM_FRAME_LEN);
+  sequence_len = max((CHANNELS*MAX_PULSE_OUT) + PPM_END_PULSE, PPM_FRAME_LEN);
   pinMode(PPM_OUT_PIN, OUTPUT);
   digitalWrite(PPM_OUT_PIN, !PPM_POLARITY);
   cli();
@@ -44,9 +44,9 @@ ISR (TIMER1_COMPA_vect) {
   if (state) {
     digitalWrite(PPM_OUT_PIN, !PPM_POLARITY);
     if (cur_chan < CHANNELS) { // finish the channel-pulse
-      OCR1A = (rx[cur_chan] - PPM_PULSE_LEN) << 1;
+      OCR1A = (chan[cur_chan] - PPM_PULSE_LEN) << 1;
       sei();
-      rest = sequence_len - rx[cur_chan++];
+      rest = sequence_len - chan[cur_chan++];
     }
     else {  // give the Endpulse
       OCR1A = (rest - PPM_PULSE_LEN) << 1;
@@ -87,11 +87,9 @@ void process_output() {
   if ((milli_s() - last_sbus_out) >= (14 - (7 * SBUS_FAST_MODE))) {  // decide wether you have fast or slow SBUS
     last_sbus_out = milli_s();
     for (uint8_t i = 0; i < CHANNELS; i++) {
-      static uint16_t temp_rx[CHANNELS];
       cli();
-      temp_rx[i] = rx[i];         // read out all channel values
+      sbus_ch[i] = chan[i];         // read out all channel values
       sei();
-      sbus_ch[i] = map(temp_rx[i], MIN_PULSE, MAX_PULSE, 0, 2047);  // convert channel values to sbus range
     }
     /*
      * start the communication and write all channels (first convert them)
@@ -119,8 +117,8 @@ void process_output() {
     serial_write(SBUS_PORT, ((sbus_ch[13]>>9) & 0x03) | (sbus_ch[14]<<2));                             // chan13 2/2  chan14 6/11
     serial_write(SBUS_PORT, ((sbus_ch[14]>>6) & 0x1F) | (sbus_ch[15]<<5));                             // chan14 5/5  chan15 3/11
     serial_write(SBUS_PORT, sbus_ch[15]>>3);                                                           // chan15 8/8
-    if (sbus_ch[16] > MID_PULSE) bitSet(flagbyte,0); else bitClear(flagbyte,0);                        // chan16 digital
-    if (sbus_ch[17] > MID_PULSE) bitSet(flagbyte,1); else bitClear(flagbyte,1);                        // chan17 digital
+    if (sbus_ch[16] > MID_PULSE_OUT) bitSet(flagbyte,0); else bitClear(flagbyte,0);                        // chan16 digital
+    if (sbus_ch[17] > MID_PULSE_OUT) bitSet(flagbyte,1); else bitClear(flagbyte,1);                        // chan17 digital
     serial_write(SBUS_PORT, flagbyte);
     serial_write(SBUS_PORT, SBUS_ENDBYTE);
     serial_activate(SBUS_PORT);             // activate serial port to finally send the data block
@@ -131,17 +129,19 @@ void process_output() {
 
 /////////////////////////////////////////////// PWM ///////////////////////////////////////////////////////////
 
-#if CHANNELS > 10
-#define EXTENDED_PWM_OUT // for more than 10 pwm out channels (up to 18), might not be so accurate
-#endif
-
 #if defined PWM_OUT
+
+#if (CHANNELS*(MAX_PULSE_OUT+10)) > 20000
+#define EXTENDED_PWM_OUT // for more than 10 pwm out channels (up to 18), might not be so accurate
+#if CHANNELS%2
+#error select even number of channels to avoid complications!
+#endif
+#endif
 
                  //////////////////////// EXTENDED_PWM_OUT ////////////////////////
 
 #if defined EXTENDED_PWM_OUT 
 
-//volatile uint8_t flag=1;
 volatile uint16_t ocr[CHANNELS];
 volatile uint8_t fall[CHANNELS/2];
 volatile uint16_t sequence_len, endpulse;
@@ -153,7 +153,7 @@ volatile uint16_t sequence_len, endpulse;
  *   
  * "lines"||                 |                    |              |              |--endpulse--|                 |
  *        |
- * chans: | _____________     ____________________ ______________ _____________               _____________                            ___ logic PWM_POLARITY
+ * chans: | _____________     ____________________ ______________ _____________               _____________                             ___ logic PWM_POLARITY
  *2,4,6.. ||             |   |                    |              |             |             |             |
  * (even) ||    chan2    |   |       chan4        |    chan6     |     .....   |             |    chan2    |       and so on                          
  *        ||_____________|___|____________________|______________|_____________|_____________|_____________|_________________________   ___ logic !PPM_POLARITY
@@ -170,7 +170,7 @@ volatile uint16_t sequence_len, endpulse;
  */
 
 void setup_output() {
-  sequence_len = (CHANNELS/2)*(MAX_PULSE+10);      // servo update rate is dynamic. for standard pulselengths (~2000 max) it is 50Hz+ max (18chans)
+  sequence_len = max((CHANNELS/2)*(MAX_PULSE_OUT+10),(1000/MAX_PWM_RATE_HZ)*1000) << 1;      // servo update rate is dynamic. for standard pulselengths (~2000 max) it is 50Hz+ max (18chans)
   /*
    * setting all output pins
    * and configure TIMER/COUNTER1
@@ -194,22 +194,20 @@ void process_output() {
   // nothing to do here, everythin is interrupt-triggered
 }
 
-void calc_schedule() {
+uint32_t calc_schedule() {
   sei();
-  //if (flag) {
-    endpulse = sequence_len;
-    for (uint8_t i = 0; i < CHANNELS; i +=2) {
-      static uint16_t temp[2];
-      cli();
-      temp[0] = rx[i]; temp[1] = rx[i+1];
-      sei();
-      temp[0] = constrain(temp[0], MIN_PULSE, MAX_PULSE); temp[1] = constrain(temp[1], MIN_PULSE, MAX_PULSE);
-      if (temp[0] < temp[1]) { ocr[i] = temp[0]<<1; ocr[i+1] = max(temp[1] - temp[0], 5)<<1; fall[i>>1] = i; }
-      else                   { ocr[i] = temp[1]<<1; ocr[i+1] = max(temp[0] - temp[1], 5)<<1; fall[i>>1] = i+1; }
-      endpulse -= (ocr[i]+ocr[i+1]);
-    }
-    //flag = 0;
-  //}
+  uint32_t time_temp = micro_s();
+  endpulse = sequence_len;
+  for (uint8_t i = 0; i < CHANNELS; i +=2) {
+    static uint16_t temp[2];
+    cli();
+    temp[0] = chan[i]; temp[1] = chan[i+1];
+    sei();
+    if (temp[0] < temp[1]) { ocr[i] = temp[0]<<1; ocr[i+1] = max(temp[1] - temp[0], 10)<<1; fall[i>>1] = i; }
+    else                   { ocr[i] = temp[1]<<1; ocr[i+1] = max(temp[0] - temp[1], 10)<<1; fall[i>>1] = i+1; }
+    endpulse -= (ocr[i]+ocr[i+1]);
+  }
+  return (micro_s() - time_temp);
 }
 
 ISR(TIMER1_COMPA_vect) {
@@ -219,18 +217,19 @@ ISR(TIMER1_COMPA_vect) {
     PORTD=0;
     PORTB=0;
     PORTC=0;
-    OCR1A = endpulse << 1;  // all pins are cleared and we wait until the frame (see "sequence_len") is completed
+    OCR1A = endpulse;  // all pins are cleared and we wait until the frame (see "sequence_len") is completed
     i = 0;                  // clear channel counter
-    calc_schedule();        // calculate all coming stuff at the beginning, to save as much time, thus precession, as possible
   }
   if (i < 4) {
     if (!(i%2)) {
       PORTB=0;                                // clear all other pins
       PORTC=0;                                // clear all other pins
       PORTD = ((1 << (i+4)) | (1 << (i+5)));  // writing both parallel channels high
+      if (!i) ocr[0] -= calc_schedule()<<1;        // calculate all coming stuff at the beginning, to save as much time, thus precession, as possible
       OCR1A = ocr[i];                         
       i++;
-    } else {
+    }
+    else {
       PORTD &= ~(1 << (fall[i>>1]+4));  // clearing the shorter of the parallel channels 
       OCR1A = ocr[i];
       i++;
@@ -275,7 +274,7 @@ volatile uint16_t sequence_len;
  */
 
 void setup_output() {
-  sequence_len = CHANNELS*(MAX_PULSE+10);
+  sequence_len = max(CHANNELS*(MAX_PULSE_OUT+10),(1000/MAX_PWM_RATE_HZ)*1000);
   /*
    * setting all output pins
    * and configure TIMER/COUNTER1
@@ -315,20 +314,20 @@ ISR(TIMER1_COMPA_vect) {
     PORTD = (1 << i+4);          // set only the one pin and clear all others
     PORTB = 0;
     PORTC = 0;
-    endPulse -= rx[i];           // recalculate endPulse
-    OCR1A = rx[i++] << 1;
+    endPulse -= chan[i];           // recalculate endPulse
+    OCR1A = chan[i++] << 1;
   }
   else if ( i < 10 ) {
     PORTB = (1 << (i - 4));
     PORTD = 0;
-    endPulse -= rx[i];
-    OCR1A = rx[i++] << 1;
+    endPulse -= chan[i];
+    OCR1A = chan[i++] << 1;
   }
   else {
     PORTC = (1 << (i - 10));
     PORTD = 0;
-    endPulse -= rx[i];
-    OCR1A = rx[i++] << 1;
+    endPulse -= chan[i];
+    OCR1A = chan[i++] << 1;
   }
 }
 

@@ -36,15 +36,16 @@
 #include "output.h"
 #include "timings.h"
 
-int16_t rx[CHANNELS];
+int16_t chan[CHANNELS];
 
 void setup() {
 ////// dont touch this //
-  for (uint8_t i = 0 ; i < CHANNELS; i++) rx[i] = MID_PULSE;
+  for (uint8_t i = 0 ; i < CHANNELS; i++) chan[i] = MID_PULSE_OUT;
   setup_output();
   setup_input();
   timing_init();
 ////////////////////////
+  serial_begin(0, 115200);
 
   /*
   if you want to modify RX-Data, place your setup here
@@ -53,6 +54,17 @@ void setup() {
 }
 
 void loop () {
+  static uint32_t temp;
+  if (milli_s() - temp > 20) {
+    temp = milli_s();
+    for (uint8_t i = 0; i < CHANNELS; i++) {
+      cli();
+      uint16_t temp = chan[i];
+      sei();
+      serial_print(0, (String)temp); serial_print(0, "\t");
+    }
+    serial_print(0,"\n");
+  }
   /*
   if you want to modify RX-Data, place your Main here
   */

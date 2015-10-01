@@ -4,7 +4,7 @@
 #include "basic_uart.h"
 #include "timings.h"
 
-extern int16_t rx[CHANNELS];
+extern int16_t chan[CHANNELS];
 int8_t subtrim[CHANNELS] = SUBTRIMS;
 
 /////////////////////////////////////////////// PWM ///////////////////////////////////////////////////////////
@@ -16,7 +16,7 @@ volatile uint32_t cur_micros = 0;
 void setup_input() {
   /*
    * in this setup the PORT-masks of the ATM328 are set to the correct pinModes (all inpus except TX)
-   * below, the interrupts ar set. 
+   * below, the interrupts ar set.
    */
   DDRD = B00000101; /*D0~D7  without Pin 0 and 1 for serial and D2 for PPM out*/
 #if CHANNELS > 4
@@ -58,8 +58,8 @@ void ISR_function() {
   static uint32_t cur_state, last_state, change;
   static uint32_t pcint_last_change[CHANNELS];
   static uint16_t temp_pulse;
-  
-// writing the PIN masks into one uint32_t
+
+  // writing the PIN masks into one uint32_t
   cur_state = (PIND >> 4);
 #if CHANNELS > 4
   cur_state |= (PINB << 4);
@@ -76,10 +76,11 @@ void ISR_function() {
       if (((cur_state >> i) & 0x000001) == PWM_POLARITY) pcint_last_change[i] = cur_micros;    // pulse begin; rising or falling edge depending on PWM_POLARITY
       else {                                                                                   // pulse end
         temp_pulse = (cur_micros - pcint_last_change[i]);  // calculating pulse
-        constrain(temp_pulse, MIN_PULSE, MAX_PULSE);
-        temp_pulse += subtrim[i];
+        if (temp_pulse < MIN_PULSE_IN) temp_pulse = MIN_PULSE_IN;
+        else if (temp_pulse > MAX_PULSE_IN) temp_pulse = MAX_PULSE_IN;
+        temp_pulse = map(temp_pulse + subtrim[i], MIN_PULSE_IN, MAX_PULSE_IN, MIN_PULSE_OUT, MAX_PULSE_OUT);
         cli();
-        rx[i] = temp_pulse;
+        chan[i] = temp_pulse;
         sei();
       }
     }
@@ -112,7 +113,6 @@ ISR(PCINT1_vect) {
 /////////////////////////////////////////////// SBUS ///////////////////////////////////////////////////////////
 #if defined (SBUS_IN)
 
-#define SBUS_MID_OFFSET 988
 #define SBUS_STARTBYTE 0x0F
 #define SBUS_ENDBYTE 0x00
 
@@ -121,8 +121,8 @@ void setup_input() {
 }
 
 void process_input() {
-  
-  static uint16_t sbus[25] = {0}, sbus_rx[18];
+
+  static uint16_t sbus[25] = {0}, sbus_chan[18];
   static uint8_t sbusIndex = 0;
   while (serial_available(SBUS_PORT)) {
     int val = serial_read(SBUS_PORT);
@@ -131,34 +131,32 @@ void process_input() {
     if (sbusIndex >= 25) {
       sbusIndex = 0;
       /*
-       * reading and converting SBUS-data into PWM data
+       * reading SBUS-data
        */
-      sbus_rx[0]  = ((sbus[1] | sbus[2] << 8) & 0x07FF)                          / 2 + SBUS_MID_OFFSET;
-      sbus_rx[1]  = ((sbus[2]  >> 3 | sbus[3] << 5)  & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[2]  = ((sbus[3]  >> 6 | sbus[4] << 2   | sbus[5] << 10) & 0x07FF)  / 2 + SBUS_MID_OFFSET;
-      sbus_rx[3]  = ((sbus[5]  >> 1 | sbus[6] << 7)  & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[4]  = ((sbus[6]  >> 4 | sbus[7] << 4)  & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[5]  = ((sbus[7]  >> 7 | sbus[8] << 1   | sbus[9] << 9) & 0x07FF)   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[6]  = ((sbus[9]  >> 2 | sbus[10] << 6) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[7]  = ((sbus[10] >> 5 | sbus[11] << 3) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[8]  = ((sbus[12]      | sbus[13] << 8) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[9]  = ((sbus[13] >> 3 | sbus[14] << 5) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[10] = ((sbus[14] >> 6 | sbus[15] << 2  | sbus[16] << 10) & 0x07FF) / 2 + SBUS_MID_OFFSET;
-      sbus_rx[11] = ((sbus[16] >> 1 | sbus[17] << 7) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[12] = ((sbus[17] >> 4 | sbus[18] << 4) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[13] = ((sbus[18] >> 7 | sbus[19] << 1  | sbus[20] << 9) & 0x07FF)  / 2 + SBUS_MID_OFFSET;
-      sbus_rx[14] = ((sbus[20] >> 2 | sbus[21] << 6) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
-      sbus_rx[15] = ((sbus[21] >> 5 | sbus[22] << 3) & 0x07FF)                   / 2 + SBUS_MID_OFFSET;
+      sbus_chan[0]  = ((sbus[1] | sbus[2] << 8) & 0x07FF);
+      sbus_chan[1]  = ((sbus[2]  >> 3 | sbus[3] << 5)  & 0x07FF);
+      sbus_chan[2]  = ((sbus[3]  >> 6 | sbus[4] << 2   | sbus[5] << 10) & 0x07FF);
+      sbus_chan[3]  = ((sbus[5]  >> 1 | sbus[6] << 7)  & 0x07FF);
+      sbus_chan[4]  = ((sbus[6]  >> 4 | sbus[7] << 4)  & 0x07FF);
+      sbus_chan[5]  = ((sbus[7]  >> 7 | sbus[8] << 1   | sbus[9] << 9) & 0x07FF);
+      sbus_chan[6]  = ((sbus[9]  >> 2 | sbus[10] << 6) & 0x07FF);
+      sbus_chan[7]  = ((sbus[10] >> 5 | sbus[11] << 3) & 0x07FF);
+      sbus_chan[8]  = ((sbus[12]      | sbus[13] << 8) & 0x07FF);
+      sbus_chan[9]  = ((sbus[13] >> 3 | sbus[14] << 5) & 0x07FF);
+      sbus_chan[10] = ((sbus[14] >> 6 | sbus[15] << 2  | sbus[16] << 10) & 0x07FF);
+      sbus_chan[11] = ((sbus[16] >> 1 | sbus[17] << 7) & 0x07FF);
+      sbus_chan[12] = ((sbus[17] >> 4 | sbus[18] << 4) & 0x07FF);
+      sbus_chan[13] = ((sbus[18] >> 7 | sbus[19] << 1  | sbus[20] << 9) & 0x07FF);
+      sbus_chan[14] = ((sbus[20] >> 2 | sbus[21] << 6) & 0x07FF);
+      sbus_chan[15] = ((sbus[21] >> 5 | sbus[22] << 3) & 0x07FF);
       // now the two Digital-Channels
-      sbus_rx[16] = (sbus[23] & 0x0001) ? 2000 : 1000;
-      sbus_rx[17] = ((sbus[23] >> 1) & 0x0001) ? 2000 : 1000;
-      //      if ((sbus[23]) & 0x0001)       sbus_rx[16] = 2000; else sbus_rx[16] = 1000;
-      //      if ((sbus[23] >> 1) & 0x0001)  sbus_rx[17] = 2000; else sbus_rx[17] = 1000;
+      sbus_chan[16] = (sbus[23] & 0x0001) ? MAX_PULSE_IN : MIN_PULSE_IN;
+      sbus_chan[17] = ((sbus[23] >> 1) & 0x0001) ? MAX_PULSE_IN : MIN_PULSE_IN;
 
       for (uint8_t i = 0; i < CHANNELS; i++) {
-        sbus_rx[i] += subtrim[i];
+        sbus_chan[i] = map(sbus_chan[i] + subtrim[i], MIN_PULSE_IN, MAX_PULSE_IN, MIN_PULSE_OUT, MAX_PULSE_OUT);
         cli();
-        rx[i] = sbus_rx[i];
+        chan[i] = sbus_chan[i];
         sei();
       }
     }
@@ -171,11 +169,11 @@ void process_input() {
 
 #if defined PPM_IN
 
-#define MIN_END_PULSE 3000
+#define MIN_END_PULSE_IN 3000
 #if defined ATMEGA2560
-  #define PPM_IN_PIN A8
+#define PPM_IN_PIN A8
 #else
-  #define PPM_IN_PIN 3
+#define PPM_IN_PIN 3
 #endif
 
 volatile uint32_t cur_micros = 0;
@@ -194,9 +192,29 @@ void setup_input() {
 #endif // ATMEGA328 - ATMEGA2560
 }
 
+volatile uint16_t temp_chan[CHANNELS];
+volatile uint8_t ppm_channels, ppm_flag = 0;
 
 void  process_input() {
-  // nothing to do here, everything is interrupt-triggered
+  if (ppm_flag)  {
+  #if defined SMOOTH_PPM_IN
+    static uint16_t rcData4Values[CHANNELS][4], rcDataMean[CHANNELS];
+    static uint8_t rc4ValuesIndex = 0;
+    rc4ValuesIndex++;
+    if (rc4ValuesIndex == 4) rc4ValuesIndex = 0;
+    for (uint8_t chan_count = 0; chan_count < ppm_channels; chan_count++) {
+      rcData4Values[chan_count][rc4ValuesIndex] = temp_chan[chan_count];
+      rcDataMean[chan_count] = 0;
+      for (uint8_t a = 0; a < 4; a++) rcDataMean[chan_count] += rcData4Values[chan_count][a];
+      rcDataMean[chan_count] = (rcDataMean[chan_count] + 2) >> 2;
+      if ( rcDataMean[chan_count] < (uint16_t)chan[chan_count] - 3)  chan[chan_count] = rcDataMean[chan_count] + 2;
+      if ( rcDataMean[chan_count] > (uint16_t)chan[chan_count] + 3)  chan[chan_count] = rcDataMean[chan_count] - 2;
+    }
+  #else
+    for (uint8_t chan_count = 0; chan_count < ppm_channels; chan_count++) chan[chan_count] = temp_chan[chan_count];
+  #endif 
+    ppm_flag = 0;
+  }
 }
 
 volatile uint8_t ppm_state = 0;
@@ -215,12 +233,17 @@ ISR(PCINT2_vect) {                  // interrupt service routine for port D
     pulse_start = cur_micros;
 
     // if the endpulse is detected counter is reseted
-    if (cur_pulse >= MIN_END_PULSE) i = 0;
+    if (cur_pulse >= MIN_END_PULSE_IN) {
+      ppm_flag = 1;
+      ppm_channels = i;
+      i = 0;
+    }
     else {
-      constrain(cur_pulse, MIN_PULSE, MAX_PULSE);
-      cur_pulse += subtrim[i];
+      if (cur_pulse < MIN_PULSE_IN) cur_pulse = MIN_PULSE_IN;
+      else if (cur_pulse > MAX_PULSE_IN) cur_pulse = MAX_PULSE_IN;
+      cur_pulse = map(cur_pulse + subtrim[i], MIN_PULSE_IN, MAX_PULSE_IN, MIN_PULSE_OUT, MAX_PULSE_OUT);
       cli();
-      rx[i++] = cur_pulse;
+      temp_chan[i++] = cur_pulse;
       sei();
     }
   }
@@ -233,15 +256,15 @@ ISR(PCINT2_vect) {                  // interrupt service routine for port D
 #if defined DISABLE_INPUT
 
 void setup_input() {
-/*
- * empty, nothing to do here in this case
- */
+  /*
+   * empty, nothing to do here in this case
+   */
 }
 
 void process_input() {
-/*
- * empty, nothing to do here in this case
- */
+  /*
+   * empty, nothing to do here in this case
+   */
 }
 
 #endif // DISABLE_INPUT
