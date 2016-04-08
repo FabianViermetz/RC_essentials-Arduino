@@ -156,11 +156,11 @@ volatile uint16_t sequence_len, endpulse;
  * chans: | _____________     ____________________ ______________ _____________               _____________                             ___ logic PWM_POLARITY
  *2,4,6.. ||             |   |                    |              |             |             |             |
  * (even) ||    chan2    |   |       chan4        |    chan6     |     .....   |             |    chan2    |       and so on                          
- *        ||_____________|___|____________________|______________|_____________|_____________|_____________|_________________________   ___ logic !PPM_POLARITY
- * chans: | _________________ _______________      __________     ______________              _________________                         ___ logic PPM_POLARITY
+ *        ||_____________|___|____________________|______________|_____________|_____________|_____________|_________________________   ___ logic !PWM_POLARITY
+ * chans: | _________________ _______________      __________     ______________              _________________                         ___ logic PWM_POLARITY
  *1,3,5.. ||                 |               |    |          |   |              |            |                 |                    
  *(uneven)||      chan1      |     chan3     |    |  chan5   |   |     .....    |            |     chan1       |    and so on                           
- *        ||_________________|_______________|____|__________|___|______________|____________|_________________|_____________________   ___ logic !PPM_POLARITY 
+ *        ||_________________|_______________|____|__________|___|______________|____________|_________________|_____________________   ___ logic !PWM_POLARITY 
  *                                                                                                                            TIME
  *        
  *        you need one "parallel line" for every 10 channels in order to get ~50Hz update rate, the more lines we have, 
@@ -203,6 +203,9 @@ uint32_t calc_schedule() {
     cli();
     temp[0] = chan[i]; temp[1] = chan[i+1];
     sei();
+    /*
+     * there must be at least a difference of 10us between parallel channels, that are the max(...) calls for
+     */
     if (temp[0] < temp[1]) { ocr[i] = temp[0]<<1; ocr[i+1] = max(temp[1] - temp[0], 10)<<1; fall[i>>1] = i; }
     else                   { ocr[i] = temp[1]<<1; ocr[i+1] = max(temp[0] - temp[1], 10)<<1; fall[i>>1] = i+1; }
     endpulse -= (ocr[i]+ocr[i+1]);

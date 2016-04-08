@@ -78,7 +78,8 @@ void ISR_function() {
         temp_pulse = (cur_micros - pcint_last_change[i]);  // calculating pulse
         if (temp_pulse < MIN_PULSE_IN) temp_pulse = MIN_PULSE_IN;
         else if (temp_pulse > MAX_PULSE_IN) temp_pulse = MAX_PULSE_IN;
-        temp_pulse = map(temp_pulse + subtrim[i], MIN_PULSE_IN, MAX_PULSE_IN, MIN_PULSE_OUT, MAX_PULSE_OUT);
+        if (temp_pulse < MID_PULSE_IN) temp_pulse = map(temp_pulse + subtrim[i], MIN_PULSE_IN, MID_PULSE_IN, MIN_PULSE_OUT, MID_PULSE_OUT);
+        else                           temp_pulse = map(temp_pulse + subtrim[i], MID_PULSE_IN, MAX_PULSE_IN, MID_PULSE_OUT, MAX_PULSE_OUT);
         cli();
         chan[i] = temp_pulse;
         sei();
@@ -154,7 +155,8 @@ void process_input() {
       sbus_chan[17] = ((sbus[23] >> 1) & 0x0001) ? MAX_PULSE_IN : MIN_PULSE_IN;
 
       for (uint8_t i = 0; i < CHANNELS; i++) {
-        sbus_chan[i] = map(sbus_chan[i] + subtrim[i], MIN_PULSE_IN, MAX_PULSE_IN, MIN_PULSE_OUT, MAX_PULSE_OUT);
+        if (sbus_chan[i] < MID_PULSE_IN) sbus_chan[i] = map(sbus_chan[i] + subtrim[i], MIN_PULSE_IN, MID_PULSE_IN, MIN_PULSE_OUT, MID_PULSE_OUT);
+        else                             sbus_chan[i] = map(sbus_chan[i] + subtrim[i], MID_PULSE_IN, MAX_PULSE_IN, MID_PULSE_OUT, MAX_PULSE_OUT);
         cli();
         chan[i] = sbus_chan[i];
         sei();
@@ -242,6 +244,8 @@ ISR(PCINT2_vect) {                  // interrupt service routine for port D
       if (cur_pulse < MIN_PULSE_IN) cur_pulse = MIN_PULSE_IN;
       else if (cur_pulse > MAX_PULSE_IN) cur_pulse = MAX_PULSE_IN;
       cur_pulse = map(cur_pulse + subtrim[i], MIN_PULSE_IN, MAX_PULSE_IN, MIN_PULSE_OUT, MAX_PULSE_OUT);
+        if (cur_pulse < MID_PULSE_IN) cur_pulse = map(cur_pulse + subtrim[i], MIN_PULSE_IN, MID_PULSE_IN, MIN_PULSE_OUT, MID_PULSE_OUT);
+        else                          cur_pulse = map(cur_pulse + subtrim[i], MID_PULSE_IN, MAX_PULSE_IN, MID_PULSE_OUT, MAX_PULSE_OUT);
       cli();
       temp_chan[i++] = cur_pulse;
       sei();

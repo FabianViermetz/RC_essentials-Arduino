@@ -29,6 +29,24 @@
  * FOR INDIVIDUALISATION GO TO CONFIG.H
  */
 
+ /*
+  * Pin Config:
+  * 
+  *  - ATMega328 -
+  * RX/D0  - SBUS IN
+  * TX/D1  - SBUS OUT
+  * D2     - PPM OUT
+  * D3     - PPM_IN
+  * D4~D13 - PWM I/O 1~10
+  * A0~A7  - PWM I/O 11~18
+  * 
+  *  
+  *  - ATMega2560 -
+  * RX/D0  - SBUS IN  (standard)
+  * TX/D1  - SBUS OUT (standard)
+  * A8     - PPM_IN
+  */
+
 #include "Arduino.h"
 #include "basic_uart.h"
 #include "config.h"
@@ -55,7 +73,9 @@ void setup() {
 
 void loop () {
   static uint32_t temp;
+#if !defined SBUS_IN && !defined SBUS_OUT // only if there is no SBUS signal
   if (milli_s() - temp > 20) {
+    // this prints all Channels to a serial monitor
     temp = milli_s();
     for (uint8_t i = 0; i < CHANNELS; i++) {
       cli();
@@ -65,6 +85,7 @@ void loop () {
     }
     serial_print(0,"\n");
   }
+#endif // !defined SBUS_IN && !defined SBUS_OUT 
   /*
   if you want to modify RX-Data, place your Main here
   */

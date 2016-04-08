@@ -3,6 +3,8 @@
 
 
 /* 
+ *  - Pins for ATmega328 -
+ *  
  * PWM in  - D4~D13, A0~A7  (max 18)
  * SBUS in - D0 (max 16 analog / 2 digital. for more information see https://developer.mbed.org/users/Digixx/notebook/futaba-s-bus-controlled-by-mbed/ )
  * PPM in  - D3
@@ -27,7 +29,7 @@
 
 //#define PPM_OUT            // ATM328 only
 //#define SBUS_OUT           // ATM328 & ATM2560
-#define PWM_OUT            // ATM328 & ATM2560
+#define PWM_OUT            // ATM328 only
 
 
 /*
@@ -55,8 +57,8 @@
 #define MAX_PULSE_IN     2000
 
 /*
- * many servos have have pulseranges much higher than RCs
- * eg. 500~2500 so to be able to get full range, set this
+ * many servos have pulse-ranges much higher than RCs
+ * eg. 500~2500 so to be able to get full range, set this to automatically map the input data correctly
  */
 #define MIN_PULSE_OUT     600
 #define MID_PULSE_OUT     1500
@@ -70,7 +72,7 @@
 
 /*
  * PPM in is always a bit jittery, 
- * that why it is usually good to smooth it a little
+ * that is why it is usually good to smooth it a little
  */
 #define SMOOTH_PPM_IN
 
@@ -82,7 +84,7 @@
  * the maximum update rate (standard is 50 Hz)
  *
  * EXTENDED_PWM_OUT also increases possible rates, but also decreases accuracy. 
- * this is always set, if CHANNELS are to high, to sustain more than 50 Hz.
+ * this is always set, if CHANNELS are too high, to sustain more than 50 Hz.
  * for more information see output.cpp -> "PPM_OUT"
  */
  #define MAX_PWM_RATE_HZ 100
