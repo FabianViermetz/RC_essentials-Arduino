@@ -9,25 +9,25 @@ i managed to push the limits of an ATMega328 and added 18CH PWM input and output
 
 ## Features:
 ### Input
-*18CH PWM
-*8CH PPM
-*18CH SBUS (you might need an inverter)
+* 18CH PWM
+* 8CH PPM
+* 18CH SBUS (you might need an inverter)
 You can add own inputs via
-*Standard Serial UART
-*I2C
+* Standard Serial UART
+* I2C
 
 
 ### Output
-*18CH PWM
-*xCH PPM
-*18CH SBUS (again you might need an inverter)
+* 18CH PWM
+* xCH PPM
+* 18CH SBUS (again you might need an inverter)
 You can add own outputs via
 *Standard Serial UART
 *I2C
 
 ### General
-*PWM-input smoother/filter
-*offset for all channels
+* PWM-input smoother/filter
+* offset for all channels
 
 There is still room for custom code e.g. for signal-modifications during conversion.
 
