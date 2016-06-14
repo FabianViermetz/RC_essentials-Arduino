@@ -12,6 +12,7 @@ i managed to push the limits of an ATMega328 and added 18CH PWM input and output
 * 18CH PWM
 * 8CH PPM
 * 18CH SBUS (you might need an inverter)
+
 You can add own inputs via
 * Standard Serial UART
 * I2C
@@ -21,6 +22,7 @@ You can add own inputs via
 * 18CH PWM
 * xCH PPM
 * 18CH SBUS (again you might need an inverter)
+
 You can add own outputs via
 *Standard Serial UART
 *I2C
